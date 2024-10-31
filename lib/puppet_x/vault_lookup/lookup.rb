@@ -56,6 +56,19 @@ module PuppetX
 
         client = Puppet.runtime[:http]
 
+        custom_cacert_path = ENV['VAULT_CACERT']
+        ssl_context = nil
+        unless custom_cacert_path.nil?
+          raw = File.binread custom_cacert_path # DER- or PEM-encoded
+          cert = OpenSSL::X509::Certificate.new raw
+
+          ssl_provider = Puppet::SSL::SSLProvider::new
+          ssl_context = ssl_provider.create_system_context(cacerts: [cert], include_client_cert: true)
+        else
+          # TODO Does this work??
+          ssl_context = ssl_provider.create_system_context()
+        end
+
         case auth_method
         when 'cert'
           token = get_cert_auth_token(client,
@@ -98,7 +111,8 @@ module PuppetX
                           uri: secret_uri,
                           token: token,
                           namespace: namespace,
-                          key: field)
+                          key: field,
+                          ssl_context: ssl_context)
 
         sensitive_data = Puppet::Pops::Types::PSensitiveType::Sensitive.new(data)
         Puppet.debug "Caching found data for #{path}"
@@ -114,11 +128,11 @@ module PuppetX
         end
       end
 
-      def self.get_secret(client:, uri:, token:, namespace:, key:)
+      def self.get_secret(client:, uri:, token:, namespace:, key:, ssl_context:)
         headers = { 'X-Vault-Token' => token, 'X-Vault-Namespace' => namespace }.delete_if { |_key, value| value.nil? }
         secret_response = client.get(uri,
                                      headers: headers,
-                                     options: { include_system_store: true })
+                                     options: { ssl_context: ssl_context })
         unless secret_response.success?
           message = "Received #{secret_response.code} response code from vault at #{uri} for secret lookup"
           raise Puppet::Error, append_api_errors(message, secret_response)
