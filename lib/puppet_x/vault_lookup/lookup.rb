@@ -65,8 +65,7 @@ module PuppetX
           ssl_provider = Puppet::SSL::SSLProvider::new
           ssl_context = ssl_provider.create_system_context(cacerts: [cert], include_client_cert: true)
         else
-          # TODO Does this work??
-          ssl_context = ssl_provider.create_system_context()
+          ssl_context = nil
         end
 
         case auth_method
@@ -130,9 +129,10 @@ module PuppetX
 
       def self.get_secret(client:, uri:, token:, namespace:, key:, ssl_context:)
         headers = { 'X-Vault-Token' => token, 'X-Vault-Namespace' => namespace }.delete_if { |_key, value| value.nil? }
+        options = if ssl_context.nil? { include_system_store: true } else { ssl_context: ssl_context } end
         secret_response = client.get(uri,
                                      headers: headers,
-                                     options: { ssl_context: ssl_context })
+                                     options: options)
         unless secret_response.success?
           message = "Received #{secret_response.code} response code from vault at #{uri} for secret lookup"
           raise Puppet::Error, append_api_errors(message, secret_response)
