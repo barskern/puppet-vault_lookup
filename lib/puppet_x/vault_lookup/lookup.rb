@@ -129,7 +129,12 @@ module PuppetX
 
       def self.get_secret(client:, uri:, token:, namespace:, key:, ssl_context:)
         headers = { 'X-Vault-Token' => token, 'X-Vault-Namespace' => namespace }.delete_if { |_key, value| value.nil? }
-        options = { include_system_store: true, ssl_context: ssl_context }.delete_if { |_key, value| value.nil? }
+        options = if ssl_context.nil? {
+          { include_system_store: true }
+        } else {
+          { ssl_context: ssl_context }
+        }
+        end
         secret_response = client.get(uri,
                                      headers: headers,
                                      options: options)
